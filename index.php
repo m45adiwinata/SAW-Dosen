@@ -21,20 +21,66 @@
             'rata2_waktu' => ['jenis' => 'cost', 'persentase' => 15],
             'rata2_selesai' => ['jenis' => 'cost', 'persentase' => 10]
         );
-        $sql = "SELECT b.lastname, d.fullname, SUM(a.grade)/COUNT(a.id) AS rata2, t.jml_quiz, t2.retake_formatif, t3.retake_sumatif, t4.rata2_waktu, t5.rata2_selesai FROM `mdl_quiz_grades` a
+        $sql = "SELECT b.lastname, SUM(a.grade)/COUNT(a.id) AS rata2, t.jml_quiz, t2.retake_formatif, t3.retake_sumatif, t4.rata2_waktu, t5.rata2_selesai FROM `mdl_quiz_grades` a
                     INNER JOIN `mdl_quiz` c ON a.quiz = c.id
                     INNER JOIN `mdl_course` d ON d.id = c.course
                     INNER JOIN `mdl_context` e ON e.instanceid = d.id
                     INNER JOIN `mdl_role_assignments` f ON f.contextid = e.id
                     INNER JOIN mdl_user b ON f.userid = b.id
                     INNER JOIN `mdl_role` g ON g.id = f.roleid
-                    LEFT JOIN (SELECT course, COUNT(id) AS jml_quiz FROM `mdl_quiz` GROUP BY course) t ON t.course = d.id
-                    LEFT JOIN (SELECT course, SUM(attempts)/COUNT(id) AS retake_formatif FROM `mdl_quiz` WHERE LEFT(NAME,1) = 1 GROUP BY course) t2 ON t2.course = d.id
-                    LEFT JOIN (SELECT course, SUM(attempts)/COUNT(id) AS retake_sumatif FROM `mdl_quiz` WHERE LEFT(NAME,1) = 2 GROUP BY course) t3 ON t3.course = d.id
-                    LEFT JOIN (SELECT course, (SUM(timelimit)/COUNT(id))/60 AS rata2_waktu FROM `mdl_quiz` GROUP BY course) t4 ON t4.course = d.id
-                    LEFT JOIN (SELECT b.course, SUM(a.timefinish-a.timestart)/COUNT(b.id) rata2_selesai FROM `mdl_quiz_attempts` a INNER JOIN `mdl_quiz` b ON a.quiz = b.id GROUP BY b.course) t5 ON t5.course = d.id
+                    LEFT JOIN (
+                        SELECT e.id, COUNT(a.id) AS jml_quiz FROM `mdl_quiz` a 
+                            INNER JOIN `mdl_course` b ON a.course = b.id
+                            INNER JOIN `mdl_context` c ON c.instanceid = b.id
+                            INNER JOIN `mdl_role_assignments` d ON d.contextid = c.id
+                            INNER JOIN `mdl_user` e ON d.userid = e.id
+                            INNER JOIN `mdl_role` f ON f.id = d.roleid
+                            WHERE f.shortname = 'editingteacher' AND e.username <> 'admin'
+                            GROUP BY e.id
+                        ) t ON t.id = b.id
+                    LEFT JOIN (
+                        SELECT e.id, SUM(a.attempts)/COUNT(a.id) AS retake_formatif FROM `mdl_quiz` a 
+                            INNER JOIN `mdl_course` b ON a.course = b.id
+                            INNER JOIN `mdl_context` c ON c.instanceid = b.id
+                            INNER JOIN `mdl_role_assignments` d ON d.contextid = c.id
+                            INNER JOIN mdl_user e ON d.userid = e.id
+                            INNER JOIN `mdl_role` f ON f.id = d.roleid
+                            WHERE LEFT(a.name,1) = 1 AND f.shortname = 'editingteacher' AND e.username <> 'admin'
+                            GROUP BY e.id
+                        ) t2 ON t2.id = b.id
+                    LEFT JOIN (
+                        SELECT e.id, SUM(a.attempts)/COUNT(a.id) AS retake_sumatif FROM `mdl_quiz` a 
+                            INNER JOIN `mdl_course` b ON a.course = b.id
+                            INNER JOIN `mdl_context` c ON c.instanceid = b.id
+                            INNER JOIN `mdl_role_assignments` d ON d.contextid = c.id
+                            INNER JOIN mdl_user e ON d.userid = e.id
+                            INNER JOIN `mdl_role` f ON f.id = d.roleid
+                            WHERE LEFT(a.name,1) = 2 AND f.shortname = 'editingteacher' AND e.username <> 'admin'
+                            GROUP BY e.id
+                        ) t3 ON t3.id = b.id
+                    LEFT JOIN (
+                        SELECT e.id, (SUM(a.timelimit)/COUNT(a.id))/60 AS rata2_waktu FROM `mdl_quiz` a
+                            INNER JOIN `mdl_course` b ON a.course = b.id
+                            INNER JOIN `mdl_context` c ON c.instanceid = b.id
+                            INNER JOIN `mdl_role_assignments` d ON d.contextid = c.id
+                            INNER JOIN mdl_user e ON d.userid = e.id
+                            INNER JOIN `mdl_role` f ON f.id = d.roleid
+                            WHERE f.shortname = 'editingteacher' AND e.username <> 'admin'
+                            GROUP BY e.id
+                        ) t4 ON t4.id = b.id
+                    LEFT JOIN (
+                        SELECT e.id, SUM(z.timefinish-z.timestart)/COUNT(a.id) rata2_selesai FROM `mdl_quiz_attempts` z 
+                            INNER JOIN `mdl_quiz` a ON z.quiz = a.id
+                            INNER JOIN `mdl_course` b ON a.course = b.id
+                            INNER JOIN `mdl_context` c ON c.instanceid = b.id
+                            INNER JOIN `mdl_role_assignments` d ON d.contextid = c.id
+                            INNER JOIN mdl_user e ON d.userid = e.id
+                            INNER JOIN `mdl_role` f ON f.id = d.roleid
+                            WHERE f.shortname = 'editingteacher' AND e.username <> 'admin'
+                            GROUP BY e.id
+                        ) t5 ON t5.id = b.id
                     WHERE g.shortname = 'editingteacher' AND b.username <> 'admin'
-                    GROUP BY c.course";
+                    GROUP BY b.id";
         $data = $conn->query($sql);
         $data = $data->fetch_all(MYSQLI_ASSOC);
         
@@ -72,7 +118,6 @@
                     <thead>
                         <tr>
                             <th>Nama</th>
-                            <th>Mata Kuliah</th>
                             <th>Jumlah <br>mahasiswa <br>yg memahami materi</th>
                             <th>Jumlah <br>Quiz <br>yang <br>diberikan</th>
                             <th>Jumlah <br>Kesempatan <br>Retake <br>(sumatif)</th>
@@ -85,7 +130,6 @@
                         <?php foreach ($data as $key => $h) { ?>
                         <tr>
                             <td><?php echo $h['lastname']; ?></td>
-                            <td><?php echo $h['fullname']; ?></td>
                             <td><?php echo number_format($h['rata2'],2,'.',','); ?></td>
                             <td><?php echo $h['jml_quiz']; ?></td>
                             <td><?php echo $h['retake_sumatif']; ?></td>
@@ -105,7 +149,6 @@
                     <thead>
                         <tr>
                             <th>Nama</th>
-                            <th>Mata Kuliah</th>
                             <th>Jumlah <br>mahasiswa <br>yg memahami materi</th>
                             <th>Jumlah <br>Quiz <br>yang <br>diberikan</th>
                             <th>Jumlah <br>Kesempatan <br>Retake <br>(sumatif)</th>
@@ -118,7 +161,6 @@
                         <?php foreach ($normalisasi as $key => $h) { ?>
                         <tr>
                             <td><?php echo $h['lastname']; ?></td>
-                            <td><?php echo $h['fullname']; ?></td>
                             <td><?php echo number_format($h['rata2'],2,'.',','); ?></td>
                             <td><?php echo $h['jml_quiz']; ?></td>
                             <td><?php echo $h['retake_sumatif']; ?></td>
@@ -138,7 +180,6 @@
                     <thead>
                         <tr>
                             <th>Nama</th>
-                            <th>Mata Kuliah</th>
                             <th>Jumlah <br>mahasiswa <br>yg memahami materi</th>
                             <th>Jumlah <br>Quiz <br>yang <br>diberikan</th>
                             <th>Jumlah <br>Kesempatan <br>Retake <br>(sumatif)</th>
@@ -153,7 +194,6 @@
                         <?php foreach ($hasil as $key => $h) { ?>
                         <tr>
                             <td><?php echo $h['lastname']; ?></td>
-                            <td><?php echo $h['fullname']; ?></td>
                             <td><?php echo number_format($h['rata2'],2,'.',','); ?></td>
                             <td><?php echo $h['jml_quiz']; ?></td>
                             <td><?php echo $h['retake_sumatif']; ?></td>
@@ -172,7 +212,12 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js"></script>
     <?php
         echo '<script>';
-        echo 'console.log('. json_encode( $hasil ) .')';
+        echo 'console.log("Analisis:");';
+        echo 'console.log('. json_encode( $data ) .');';
+        echo 'console.log("Normalisasi:");';
+        echo 'console.log('. json_encode( $normalisasi ) .');';
+        echo 'console.log("Perankingan:");';
+        echo 'console.log('. json_encode( $hasil ) .');';
         echo '</script>';
     ?>
 </body>
